@@ -9,7 +9,7 @@ const registerUser = asyncHandler( async (req , res) => {
     const {fullName,username,password,email} = req.body;
 
     if(
-        [fullName,username,password,email].some((field) => field?.trim == "")
+        [fullName,username,password,email].some((field) => !field?.trim())
     ){
         throw new ApiError(400,"All fields are required")
     };
@@ -24,7 +24,7 @@ const registerUser = asyncHandler( async (req , res) => {
 
     const avaterLocalPath = req.files?.avatar[0]?.path;
    
-    let converImageLocalPath;
+    let coverImageLocalPath;
     if(req.files && Array.isArray(req.files.coverImage) && req.files.coverImage.length > 0){
         coverImageLocalPath = req.files?.coverImage[0]?.path;
     }
@@ -32,7 +32,7 @@ const registerUser = asyncHandler( async (req , res) => {
     if(!avaterLocalPath){
         throw new ApiError(409,"Avatar file is required")
     };
-    console.log(req);
+    
     const avatar = await uploadOnCloudinary(avaterLocalPath);
     const coverImage = await uploadOnCloudinary(coverImageLocalPath);
     
@@ -80,7 +80,7 @@ const generateAccessTokenAndRefreshToken = async (userId)=> {
 const userLogin = asyncHandler(async (req,res)=>{
         const {email,username,password} = req.body
 
-        if(!email || !username){
+        if(!email && !username){
             throw new ApiError(400,"user or email is required")
         }
 
@@ -114,4 +114,30 @@ const userLogin = asyncHandler(async (req,res)=>{
         .json(new ApiResponse(200,{user:LoggedInUser,accessToken,refreshToken},"User successfully logged in"))
 })
 
-export default registerUser;
+const userLogOut = asyncHandler(async (req,res) => {
+    await User.findByIdAndUpdate(
+        req.user._id,
+        {
+            $set : {
+                refreshToken: undefined
+            }
+        },
+        {
+            new : true
+        }
+    )
+    
+    const options = {
+            httpOnly : true,
+            secure : true
+        }
+
+    return res
+    .status(200)
+    .clearCookies("accessToken",options)
+    .clearCookies("refreshToken",options)
+    .json(new ApiResponse(200,{},"User logged Out"))
+
+})
+
+export {registerUser,userLogin,userLogOut}
