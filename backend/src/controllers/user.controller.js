@@ -197,7 +197,7 @@ const refreshAccessToken = asyncHandler(async (req,res) => {
 const changeCurrentPassword = asyncHandler(async (req,res) => {
   const {oldPassword,newPassword} = req.body
 
-  const user = User.findById(req.user?._id)
+  const user = await User.findById(req.user?._id)
 
   const isPasswordCorrect = await user.isPasswordCorrect(oldPassword)
 
@@ -301,4 +301,83 @@ const updateUserCoverImage = asyncHandler(async (req,res) => {
   .json(new ApiResponse(200,user,"coverImage updatad successfully"))
 })
 
-export { registerUser, userLogin, userLogOut,refreshAccessToken,changeCurrentPassword,updateUserDetail,updateUserAvatar,updateUserCoverImage};
+const getUserChannelProfile = asyncHandler(async (res,req) => {
+  const {username} = req.params
+
+  if(!username){
+    throw new ApiError(400,"Username is missing")
+  }
+
+  const channel = await User.aggregate([
+    {
+      $match : {
+        username : username?.toLowerCase()
+      }
+    },
+    {
+      $lookup : {
+        from : "subscriptions",
+        localField : "_id",
+        foreignField : "channel",
+        as: "subscribers"
+      }
+    },
+    {
+      $lookup : {
+        from : "subscriptions",
+        localField : "_id",
+        foreignField : "subscriber",
+        as: "subscribed"
+      }
+    },
+    {
+      $addFields : {
+        subscribersCount : {
+          $size : "$subscribers"
+        },
+        subscribedCount : {
+          $size : "$subscribed"
+        },
+        isSubscribed : {
+          $cond : {
+            if : {$in : [req.user?._id,"$subscribers.subscriber"]},
+            then : true,
+            else : false
+
+          }
+        }
+      }
+    },
+    {
+      $project : {
+        fullName : 1,
+        username : 1,
+        subscribedCount : 1,
+        subscribersCount : 1,
+        email : 1,
+        avatar : 1,
+        coverImage : 1
+      }
+    }
+  ])
+
+  if(!channel){
+    throw new ApiError(404,"Channel does not exits")
+  }
+
+  return res
+  .status(200)
+  .json(new ApiResponse(200,channel[0],"User channel fetched successfully"))
+})
+
+export { 
+  registerUser, 
+  userLogin,
+  userLogOut,
+  refreshAccessToken,
+  changeCurrentPassword,
+  updateUserDetail,
+  updateUserAvatar,
+  updateUserCoverImage,
+  getUserChannelProfile
+};
