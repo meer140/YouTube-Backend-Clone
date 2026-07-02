@@ -1,6 +1,7 @@
 import asyncHandler from "../utils/asyncHandler.js";
 import ApiError from "../utils/apiError.js";
 import { Video } from "../models/video.model.js";
+import User from "../models/user.model.js";
 import uploadOnCloudinary from "../utils/cloudinary.js";
 import ApiResponse from "../utils/apiResponse.js";
 import jwt from "jsonwebtoken"
@@ -45,10 +46,7 @@ const publishAVideo = asyncHandler(async (req,res) => {
     .json(new ApiResponse(200,video,"Video is published successfully"))
 })
 
-const getVideoById = asyncHandler(async (req,res) => {
-
-    const {videoId} = req.params
-    
+const getVideo = async (videoId) => {
     if(!videoId){
         throw new ApiError(400,"Video ID is required")
     }
@@ -62,6 +60,14 @@ const getVideoById = asyncHandler(async (req,res) => {
     if(!video){
         throw new ApiError(404,"video does not exists")
     }
+
+    return video
+}
+
+const getVideoById = asyncHandler(async (req,res) => {
+      
+    const {videoId} = req.params
+    const video = await getVideo(videoId)
 
     return res
     .status(200)
@@ -72,19 +78,7 @@ const updateVideo = asyncHandler(async (req,res) => {
 
     const {videoId} = req.params
 
-    if(!videoId){
-        throw new ApiError(400,"Video ID is required")
-    }
-
-    if(!mongoose.Types.ObjectId.isValid(videoId)){
-        throw new ApiError(400,"Invalid video Id")
-    }
-
-    const video = await Video.findById(videoId)
-
-    if(!video){
-        throw new ApiError(404,"video does not exists")
-    }
+    const video = await getVideo(videoId)
 
     if (!video.owner.equals(req.user?._id)) {
         throw new ApiError(403, "You are not authorized to update this video");
@@ -118,5 +112,43 @@ const updateVideo = asyncHandler(async (req,res) => {
     .json(new ApiResponse(200,video,"Video is updated."))
 })
 
+const deleteVideo = asyncHandler(async (req, res) => {
+    const { videoId } = req.params;
 
-export {publishAVideo,getVideoById,updateVideo}
+    const video = await getVideo(videoId)
+
+    if (!video.owner.equals(req.user?._id)) {
+        throw new ApiError(403, "You are not authorized to update this video");
+    }
+
+    await Video.findByIdAndDelete(videoId);
+
+    return res.status(200).json(
+        new ApiResponse(200, {}, "Video deleted successfully")
+    )
+})
+
+const getAllVideos = asyncHandler(async (req,res) => {
+    
+    const userId = req?.user?._id
+    
+    if(!userId){
+        throw new ApiError(400,"userid is required")
+    }
+
+    const videos = await Video.find(
+        {
+            owner : userId
+        }
+    )
+
+    if(!videos){
+        throw new ApiError(400,"user id is invalid")
+    }
+
+    return res
+    .status(200)
+    .json(new ApiResponse(200,videos,"Videos fetched successfully"))
+})
+
+export {publishAVideo,getVideoById,updateVideo,deleteVideo,getAllVideos}
